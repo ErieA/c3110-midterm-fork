@@ -9,3 +9,6 @@ To play this game you need to have Ocaml intalled on your machine. For informati
 - Supports expansion packs
 - Ability to create expansion packs
 - Ability to save a load games
+
+
+#### Credit to Robert and Jonathan - 3110 Dream Team -
