@@ -33,10 +33,17 @@ val landmark_effect_to_json: Landmark.effect -> Yojson.Basic.json
     representing the given Landmark.card [landmark] *)
 val landmark_to_json: Landmark.card -> Yojson.Basic.json
 
-(** [state_to_json] is a Yojson.Basic.json associative array representing
+(** [state_to_json state] is a Yojson.Basic.json associative array representing
     all fields in the given State.t [state]. *)
 val state_to_json: (State.t) -> Yojson.Basic.json
+
+(** [state_to_ai_json state] is a Yojson.Basic.json associative array representing
+    all fields in the given State.t [state]. The difference from state_to_json
+    is that the json now has an additional field about who's in control. *)
+val state_to_json_AI: State.t -> Yojson.Basic.json
 
 (** [save_to_file save filename] takes a json save, and writes it to 
     [filename].json *)
 val save_to_file: (Yojson.Basic.json) -> string -> unit
+
+val save_to_file_AI: Yojson.Basic.json -> string -> unit

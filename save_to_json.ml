@@ -165,8 +165,19 @@ let player_to_json (player:Player.t) : Yojson.Basic.json =
 
 (* [state_to_json] is a Yojson.Basic.json associative array representing
    all fields in the given State.t [state]. *)
-let state_to_json (state:State.t) : Yojson.Basic.json =
+let state_to_json (state:State.t) : Yojson.Basic.json =   
   `Assoc [
+    ("players", list_to_json state.players player_to_json);
+    ("bank", `Int state.bank);
+    ("available cards", list_to_json state.available_cards 
+       establishment_to_json);
+    ("current player", `Int state.current_player);
+    ("landmark cards", list_to_json state.landmark_cards landmark_to_json)
+  ]
+
+let state_to_json_AI (state:State.t) : Yojson.Basic.json =   
+  `Assoc [
+    ("control", `Int 0);
     ("players", list_to_json state.players player_to_json);
     ("bank", `Int state.bank);
     ("available cards", list_to_json state.available_cards 
@@ -188,6 +199,12 @@ let save_to_file (save:Yojson.Basic.json) (filename:string) =
     for the game"
     | _ -> () in
   let address = filename ^ ".json" in
+  let open_channel = open_out address in
+  Printf.fprintf open_channel "%s" (Yojson.Basic.pretty_to_string save);
+  close_out open_channel
+
+
+let save_to_file_AI (save:Yojson.Basic.json) (address:string) =
   let open_channel = open_out address in
   Printf.fprintf open_channel "%s" (Yojson.Basic.pretty_to_string save);
   close_out open_channel
