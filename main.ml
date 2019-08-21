@@ -710,7 +710,22 @@ and help_phase_est (st:State.t) =
         await_valid_est ()
   in 
   let _ = display_help_phase_est_msg_1 () in await_valid_est ()
-(* [phase_3 st] is the state in which an establishment or a landmark card can
+
+and phase_3_AI (st: State.t): State.t =
+  let st_json = Save_to_json.state_to_json_AI st in
+  let filename = "ai_help" in 
+  let address = "/media/sf_vmshared/ai_help.json" in
+  let _ = Save_to_json.save_to_file_AI st_json address in
+  let _ =  print_endline ("fetching ai help") in
+  let rec await_update()= 
+    if
+      Load_from_json.is_blocked(address) 
+    then await_update()
+    else 
+      Load_from_json.load_from_file(address) in 
+  await_update()
+
+(* [phase_3 st] is the phase in which an establishment or a landmark card can
    be purchased, the user can access the help phase for the information of each 
    card, or the user can skip all of this and end his/her turn. *)
 and phase_3 (st: State.t): (State.t) =  
@@ -723,6 +738,7 @@ and phase_3 (st: State.t): (State.t) =
     | "landmark" | "l" -> purchase_landmark_phase st
     | "save" | "s" -> save_phase st; exit 0
     | "help" | "h" -> help_phase st
+    | "ai" -> phase_3_AI st
     | "quit" -> exit 0
     | "finish" | "f" -> 
       if buildortake then
@@ -794,12 +810,34 @@ let rec num_dice_to_roll b tc =
 let add_2_roll b = 
   if b then
     let _ = baseprint (
-        "Add2 effect has been activated.\n" ^
+        "Add2 effect has been activated.\n" ^ 
         "Would you like to add 2 to your current roll?\n" 
       ) in
     if (yes_or_no ()) = 1 then true
     else false
   else false
+
+let match_dice_input (str: string) (dice: int) : int list =
+  try 
+    let cleaned = str |>clean in 
+    let len = cleaned |> String.length in
+    let in_range n = n>0 &&n<7 in
+    if len = 1 && dice = 1 && (cleaned |> int_of_string |> in_range) 
+    then (cleaned  |> int_of_string)::[] 
+    else if dice = 1 && len != 1 then -1::[]
+    else if dice = 1 && len = 1 && not (cleaned |> int_of_string |> in_range)
+    then -1 :: [] 
+    else if len = 1 && not (dice =1) then -1 ::[]
+    else if not (clean(String.sub (cleaned) 1 (len-2)) = "" )
+    then -1::[]
+    else if in_range (int_of_string(Char.escaped(cleaned.[0]))) &&
+            in_range  (int_of_string(Char.escaped(cleaned.[len-1]))) 
+    then
+      (int_of_string(Char.escaped(cleaned.[0])))::
+      (int_of_string(Char.escaped(cleaned.[len-1])))::[]
+    else -1::[]
+  with 
+  | Failure _ -> let _ = print_string "failed" in -1::[]
 (** [await_R add state current_player tc] is the helper function in charge
     of rolling the die and activating the associated landmark effects in the
     die rolling stage *)
@@ -826,6 +864,31 @@ let rec await_R add (state : State.t) current_player tc =
     else
       rolled_state
   | "quit" -> exit 0
+  | str -> let allowed_d = current_player.num_dice in 
+    let parsed = match_dice_input str allowed_d in
+    if List.mem (-1) parsed
+    then let _ = display_phase_1_msg_3 tc in  await_R add state current_player tc
+    else let updated_player = Player.custom_rolled_player current_player parsed in
+      let rolled_state = 
+        State.replace_player_list   
+          (State.replace_player updated_player state.players) state in
+      let roll_num = Player.calc_roll updated_player in 
+      let _ = display_phase_1_msg_2 tc (roll_num) in
+      if roll_num >= 10  then
+        if ((add_2_roll add) = true) then
+          let rolled_state = 
+            State.replace_player_list   
+              (State.replace_player 
+                 (State.add2_to_dice updated_player) state.players) 
+              state in
+          let roll_num = 
+            Player.calc_roll (State.get_current_player rolled_state) in 
+          let _ = display_phase_1_msg_2 tc (roll_num) in
+          rolled_state
+        else rolled_state
+      else
+        rolled_state
+
   | _ -> display_phase_1_msg_3 tc; await_R add state current_player tc
 (* phase_1 is where the current player's fields dice_rolls, which is an int
    list, is updated. It then calculates the sum of the rolls using 
@@ -944,23 +1007,91 @@ let rec main_phase (st: State.t) : unit =
   let _ = display_main_phase_msg_3 s3 current_player in 
   let redoturn = 
     State.take_other_turn (State.id_to_Player st current_player) in
+  let next_state = take_2nd_turn s3 redoturn current_player in
+  if State.is_winning_state next_state then winning_phase ()
+  else main_phase next_state
 
+let rec ai_main_phase (st: State.t) (num: int) : unit = 
+  let _ = display_main_phase_msg_1 st in
+  let current_player = State.get_current_player_id st in
+  let _ = display_main_phase_msg_3 st current_player in
+  let cityhall_c = State.cityhall_collect 
+      (State.id_to_Player st current_player) in 
+  let st = 
+    if cityhall_c then 
+      let _ = 
+        baseprint
+          ("City Hall effect has been activated. "^
+           "Since you had 0 coins, you will now have 1\n"); 
+        print_string  "> "; in
+      (* give player 1 coin from bank *)
+      let player = Player.add_cash (State.id_to_Player st current_player) 1 in
+      State.withdraw_bank
+        (State.replace_player_list (State.replace_player player st.players) st)
+        1
+    else st in
+  let s1 = do_phase1 st (State.reroll 
+                           (State.id_to_Player st current_player)) in
+  let s2 = phase_2 s1 in
+  let s3 = if st.current_player < num then phase_3_AI s2 else phase_3 s2 in
+  let _ = display_main_phase_msg_2 s3 current_player in 
+  let _ = display_main_phase_msg_3 s3 current_player in 
+  let redoturn = 
+    State.take_other_turn (State.id_to_Player st current_player) in
   let next_state = take_2nd_turn s3 redoturn current_player in
   if State.is_winning_state next_state then winning_phase ()
   else main_phase next_state
 
 (*___________________________________________________________________________*)
 
+let setup_AI (init_st:State.t) = 
+  ANSITerminal.(print_string [white;Bold] 
+                  "How many AIs do you want to play with"); 
+  print_string  "> ";
+  let num_players = List.length(init_st.players) in
+  let rec await_number() = 
+    try
+      match clean(read_line()) with 
+      | str_num -> let num = int_of_string str_num in 
+        if num>0 & num < num_players then ai_main_phase init_st num
+        else ANSITerminal.(print_string [white;Bold] 
+                             "There needs to be at least one AI agent and at least one human
+                  player.\n"); await_number()
+      | _ -> await_number()
+    with 
+    | _ ->  ANSITerminal.(print_string [white;Bold] 
+                            "Please input a number greater than 0 and less than the number of 
+                  players you are playing with.\n"); await_number() in
+  await_number()
+
 let play_game () =
   let initial = init_phase [] [] in
-  main_phase initial
+  let _ =  ANSITerminal.(print_string [white;Bold] 
+                           "Do you want to play with AIs?\n") in 
+  let _ = print_string  "> " in 
+  let rec await_AI_play () = 
+    match clean(read_line()) with 
+    | "yes" | "y" -> setup_AI initial
+    | "no" | "n" -> main_phase initial
+    | _ -> let _ =  ANSITerminal.(print_string [white;Bold] 
+                                    "Please input either yes or no.\n") in
+      await_AI_play () in
+  await_AI_play() 
+
 let play_game_expanded game = 
   let landmarks = Parse_json.load_landmarks (Yojson.Basic.from_file game) in
   let establishments =  
     Parse_json.load_establishments 
       (Yojson.Basic.from_file game) in
-  main_phase (init_phase landmarks establishments)
-
+  let _ =  ANSITerminal.(print_string [white;Bold] 
+                           "Do you want to play with AIs?\n") in 
+  let _ = print_string  "> " in 
+  let rec await_AI_play () = 
+    match clean(read_line()) with 
+    | "yes" | "y" -> setup_AI (init_phase landmarks establishments)
+    | "no" | "n" -> main_phase (init_phase landmarks establishments)
+    | _ -> await_AI_play () in
+  await_AI_play() 
 
 let rec load_expansion_pack_phase () = 
   ANSITerminal.(print_string [white;Bold] 
