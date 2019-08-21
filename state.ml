@@ -65,7 +65,7 @@ let init_state n landmarks establishments=
   }
   else raise (InvalidNumberofPlayers (n))
 
-let order_to_id n state = 
+let order_to_id n state =  
   let rec helper (n:int) (player_list: Player.t list) = 
     match player_list with
     | [] -> failwith "Player Not found"
@@ -360,13 +360,26 @@ let display_collect_fun_msg_1 tc (card:Establishment.card) player =
       ^ " activated."
       ^ " You will collect " ^ string_of_int card.effect.value ^ " coins. \n"
     ))
+
+let display_collect_fun_msg_2 tc (card:Establishment.card) player =
+  ANSITerminal.(print_string [tc] (
+      " " ^ player.id ^ "'s Shopping Mall effect has been" 
+      ^ " activated rewarding one more coin.\n"
+    ))
 (** [collect_fun c t p] displays the collect effect message for player [p]
     in [t] and returns the updated state *)
 let collect_fun (card:Establishment.card) st player = 
   let tc = turn_color st player.id in 
   let _ = display_collect_fun_msg_1 tc card player in
-  let updated_player = Player.add_cash player card.effect.value in
-  let cb = -card.effect.value in 
+  let payment_value =
+    if card.card_type = Establishment.Bread &&
+       List.mem "Shopping Mall"   
+         (Landmark.landmark_card_list_to_str_list player.landmarks) 
+    then
+      let _ = display_collect_fun_msg_2 tc card player in
+      card.effect.value + 1 else card.effect.value in
+  let updated_player = Player.add_cash player payment_value in
+  let cb = -payment_value in 
   let p_lst = replace_player updated_player st.players in
   {
     players = p_lst;
@@ -434,7 +447,7 @@ let is_valid_player_id player st p_string =
   let players = st.players in
   let rec check_players' p = function
     | [] -> false
-    | h::t -> if h.id = p then true else check_players' p t in
+    | h::t -> if clean(h.id) = p then true else check_players' p t in
   check_players' p_string players
 
 exception InvalidPlayerId
@@ -487,15 +500,24 @@ let display_take_rolled_fun_msg_1 tc st (card:Establishment.card) player =
       ^ "activated. \nYou will take " ^ string_of_int card.effect.value 
       ^ " coins from the current player, " ^ get_current_player_id st ^".\n"
     ))
+let display_take_rolled_fun_msg_2 tc st (card:Establishment.card) player =
+  ANSITerminal.(print_string [tc] (
+      " " ^ player.id ^ "'s Shopping Mall effect has been" 
+      ^ " activated rewarding one more coin.\n"
+    ))
 (** [take_rolled_fun c t p] is a state where player [p]'s card [c]'s
     take rolled effect has been activated. DIsplays appropriate messages *)
 let take_rolled_fun (card:Establishment.card) st player =
   let tc = turn_color st player.id in 
   let _ = display_take_rolled_fun_msg_1 tc st card player in
   let player_who_rolled_id = get_current_player_id st in 
+  let payment_value =
+    if List.mem "Shopping Mall"  
+        (Landmark.landmark_card_list_to_str_list player.landmarks) 
+    then let _ = display_take_rolled_fun_msg_2 tc st card player in
+      card.effect.value + 1 else card.effect.value in
   let output = pay_player st player_who_rolled_id player.id 
-      card.effect.value in
-  let _ = print_int (get_current_player output).cash in output
+      payment_value in output
 
 let display_take_all_fun_msg_1 tc (card:Establishment.card) player =
   ANSITerminal.(print_string [tc] (

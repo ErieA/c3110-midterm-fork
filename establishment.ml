@@ -16,7 +16,7 @@ type cardType =
   | Major 
   | Boat 
   | Suitcase
-  (* [activationTime] is the when in the game when the card's effects 
+  (* [activationTime] is when in the game when the card's effects 
      are activated. [AnyonesTurn] means that the effect can occur after
      anyone rolls. [PlayersTurn] mean that the effect can occur only after
      the player with the card rolls. [OthersTurn] mean that the effect can
