@@ -1,4 +1,4 @@
-﻿(**Helper functions*)
+(**Helper functions*)
 let clean str = str |> String.trim |> String.lowercase_ascii
 
 (** [get_longest_length_est card_lst] is the length of the establishment card 
@@ -1230,3 +1230,4 @@ let rec main () : unit =
 
 (* Execute the game engine. *)
 let () = main ()
+
